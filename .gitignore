@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# ML weights & model cache
+model_cache/
+*.pt
+*.pth
+*.ckpt
+*.h5
+
+# Sensitive — never commit
+.env
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Training data (too large)
+backend/data/
+
+# Logs
+*.log
+logs/
+
+# Misc / OS
+*.zip
+*.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Uploads (runtime generated)
+backend/uploads/
+uploads/

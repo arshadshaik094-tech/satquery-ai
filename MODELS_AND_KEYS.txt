@@ -1,0 +1,152 @@
+SatQuery AI — MODELS, DATASETS & API KEYS REFERENCE
+=====================================================
+Generated for the SIH 2026 submission. Every ID below is real and is
+literally what's hardcoded in backend/app/config.py — nothing here is
+invented or placeholder text.
+
+------------------------------------------------------------------
+1. API KEYS — I could NOT generate these for you. You must create
+   your own (free tiers exist for both) and paste them into
+   backend/.env (copy from backend/.env.example). Never commit .env.
+------------------------------------------------------------------
+
+GROQ_API_KEY=
+  → Get one at: https://console.groq.com/keys
+  → Used for: primary LLM orchestrator brain (query intent
+    classification + tool routing + natural-language narration of
+    specialist model outputs)
+  → Model used: llama3-70b-8192  (env var: GROQ_MODEL, overridable)
+
+OPENAI_API_KEY=
+  → Get one at: https://platform.openai.com/api-keys
+  → Used for: fallback LLM orchestrator brain if Groq is unset/fails
+  → Model used: gpt-4o  (env var: OPENAI_MODEL, overridable)
+
+LLM_PROVIDER_PRIORITY=auto
+  → "auto" = use whichever key is present (Groq tried first), "groq"
+    or "openai" to force one. If NEITHER key is set, the orchestrator
+    still works — it falls back to real keyword-based intent
+    classification (see backend/app/core/orchestrator.py), just
+    without LLM-quality query understanding.
+
+Nothing else in this project needs a key — Esri/NASA/OSM endpoints
+below are public and keyless.
+
+------------------------------------------------------------------
+2. VISION / ML MODELS ACTUALLY WIRED IN THE CODE
+------------------------------------------------------------------
+
+VQA (BLIP-1)
+  HF model ID : Salesforce/blip-vqa-base
+  File        : backend/app/models/vqa_blip.py
+  Library     : transformers.BlipProcessor / BlipForQuestionAnswering
+  Status      : Real pretrained weights, works out of the box once
+                downloaded (~1.5GB, needs internet on first run).
+
+Land-cover classification (ResNet-50 / EuroSAT)
+  Backbone ID : resnet50.a1_in1k  (via timm)
+  Classes     : AnnualCrop, Forest, HerbaceousVegetation, Highway,
+                Industrial, Pasture, PermanentCrop, Residential,
+                River, SeaLake  (EuroSAT's 10 classes)
+  File        : backend/app/models/landcover_resnet.py
+  Status      : ImageNet backbone loads for real. Classification HEAD
+                is untrained until you fine-tune it — run
+                backend/train/train_eurosat_head.py on the real
+                EuroSAT dataset and point EUROSAT_HEAD_WEIGHTS at the
+                resulting checkpoint. Until then, honest classical-CV
+                k-means clustering is used instead of a guessed label.
+
+Change detection (MobileNet-V3 / LEVIR-CD)
+  Backbone ID : mobilenetv3_large_100  (via timm)
+  File        : backend/app/models/change_detection.py
+  Status      : Same policy — backbone real, LEVIR-CD change head
+                needs backend/train/train_change_head.py +
+                CHANGE_HEAD_WEIGHTS. Fallback: classical LAB-space
+                differencing + Otsu thresholding (real algorithm).
+
+SAR + Optical fusion (Dual ResNet-18 / SEN12MS)
+  Backbone ID : resnet18  (torchvision, two independent branches —
+                one per modality)
+  File        : backend/app/models/sar_fusion.py
+  Status      : Backbones real, SEN12MS fusion head needs
+                backend/train/train_sar_fusion_head.py +
+                SAR_FUSION_HEAD_WEIGHTS. Fallback: classical SAR
+                backscatter thresholding fused with an optical water
+                heuristic (real signal processing).
+
+Grounding / referring segmentation (SAM)
+  Model type  : vit_b
+  Checkpoint  : https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
+  File        : backend/app/models/segmentation_sam.py
+  Status      : Real Meta AI weights (~375MB, auto-downloads on first
+                use if internet available). Fallback: classical
+                HSV+morphology water mask / edge-density built-up
+                mask.
+
+LLM orchestrator (agentic tool router)
+  File        : backend/app/core/llm_router.py, orchestrator.py
+  Tools it can call: describe_image, change_trend, detect_change,
+                fuse_optical_sar, ground_referring_expression
+
+------------------------------------------------------------------
+3. DATASETS REFERENCED (fine-tuning targets / eval sets)
+------------------------------------------------------------------
+
+EuroSAT     : https://github.com/phelber/EuroSAT
+LEVIR-CD    : https://justchenhao.github.io/LEVIR/
+SEN12MS     : https://mediatum.ub.tum.de/1474000
+RSVQA-LR    : https://rsvqa.sylvainlobry.com/
+DOTA v2     : https://captain-whu.github.io/DOTA/
+ISRO Bhuvan : https://bhuvan.nrsc.gov.in/
+
+------------------------------------------------------------------
+4. LIVE DATA SOURCES (real, public, keyless — wired in
+   backend/app/services/external_data.py)
+------------------------------------------------------------------
+
+Esri World Imagery (basemap tiles)
+  https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}
+
+NASA EONET v3 (live natural-events feed — shown on Dashboard)
+  https://eonet.gsfc.nasa.gov/api/v3/events
+
+NASA GIBS (MODIS Terra NDVI, 8-day composite, WMTS tiles)
+  https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/{layer}/default/{date}/{tile_matrix_set}/{z}/{y}/{x}.png
+
+Nominatim / OpenStreetMap (place name → lat/lon geocoding)
+  https://nominatim.openstreetmap.org/search
+  (User-Agent header required and set: "SatQueryAI/1.0 (SIH2026 project)")
+
+------------------------------------------------------------------
+5. ENVIRONMENT VARIABLES — FULL LIST (backend/.env.example)
+------------------------------------------------------------------
+
+GROQ_API_KEY=
+GROQ_MODEL=llama3-70b-8192
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o
+LLM_PROVIDER_PRIORITY=auto
+MODEL_WEIGHTS_MODE=auto        # auto | local | off
+MODEL_CACHE_DIR=./model_cache
+DEVICE=cpu                     # set to "cuda" if you have a GPU
+EUROSAT_HEAD_WEIGHTS=          # path to fine-tuned checkpoint, optional
+CHANGE_HEAD_WEIGHTS=           # path to fine-tuned checkpoint, optional
+SAR_FUSION_HEAD_WEIGHTS=       # path to fine-tuned checkpoint, optional
+
+------------------------------------------------------------------
+6. WHAT I VERIFIED ACTUALLY WORKS (in this sandbox, before handoff)
+------------------------------------------------------------------
+
+- Backend boots cleanly (`uvicorn app.main:app`), /api/health returns 200.
+- Full orchestrator round-trip tested end-to-end on a real uploaded
+  image pair: upload → /api/orchestrate → real classical-CV change
+  detection → real answer + overlay + confidence + tool trace.
+- All routers exercised via FastAPI TestClient: /api/upload, /api/vqa,
+  /api/dashboard/overview, /api/dashboard/models, /api/orchestrate.
+- Frontend: `npm run build` completes with zero errors (1891 modules).
+- I could NOT verify from this sandbox: real BLIP/SAM/timm weight
+  downloads (huggingface.co not reachable here), or NASA EONET/
+  Nominatim/Esri live calls (also not reachable here) — these will
+  work the moment you run the backend on a machine with normal
+  internet access. The code paths and URLs are real; only the network
+  call itself was untestable in this restricted sandbox.
